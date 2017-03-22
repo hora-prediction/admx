@@ -1,7 +1,5 @@
 package kieker
 
-import ()
-
 type OperationExecutionRecord struct {
 	Eoi                int64  `json:"eoi"`
 	Ess                int64  `json:"ess"`
