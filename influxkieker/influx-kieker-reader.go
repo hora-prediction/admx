@@ -10,9 +10,8 @@ import (
 	"github.com/teeratpitakrat/admx/kieker"
 	"github.com/teeratpitakrat/hora/adm"
 
-	"github.com/influxdata/influxdb/client/v2"
-	//"github.com/spf13/viper"
 	"github.com/golang-collections/collections/stack"
+	"github.com/influxdata/influxdb/client/v2"
 )
 
 var connectors = []string{
@@ -59,11 +58,6 @@ func (r *InfluxKiekerReader) Read() <-chan adm.ADM {
 		log.Print("Reading monitoring data in realtime mode")
 		go r.readRealtime(clnt, mCh)
 	}
-	//testm := adm.New()
-	//newcomp := adm.Component{"Testname", "hsotname", "responsetime", 0}
-	//depinfo := adm.NewDependencyInfo(newcomp)
-	//testm[newcomp.UniqName()] = depinfo
-	//mCh <- testm
 	return mCh
 }
 
@@ -200,7 +194,6 @@ LoopTraces:
 			}
 			stk.Push(callee)
 		}
-		//break // test
 	}
 	m.ComputeProb()
 	log.Print(&m)
@@ -315,36 +308,17 @@ func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) 
 	traceIds := make(map[int64]kieker.OperationExecutionRecords)
 	m := adm.New()
 
-	// Get first and last timestamp in influxdb
-	//var curtimestamp, firsttimestamp, lasttimestamp time.Time
-	//var curtimestamp time.Time
-	//firsttimestamp, lasttimestamp = r.getFirstAndLastTimestamp(clnt)
-	//if firsttimestamp.IsZero() && lasttimestamp.IsZero() {
-	//log.Print("Error: cannot find monitoring data")
-	//return
-	//}
-	// Get the larger starttime
-	//if r.Starttime.After(firsttimestamp) {
-	//curtimestamp = r.Starttime.Add(-time.Nanosecond)
-	//} else {
-	//curtimestamp = firsttimestamp.Add(-time.Nanosecond)
-	//}
-	//curtimestamp = r.Starttime
 	waitDuration := r.Endtime.Sub(r.Starttime)
 	waitCh := time.After(waitDuration)
 	log.Print("Waiting " + waitDuration.String() + " until " + r.Endtime.String())
 	<-waitCh
 
-	//LoopChunk: // Loop to get all data because InfluxDB return max. 10000 records by default
-	//for {
 	cmd := "select * from OperationExecution where time > " + strconv.FormatInt(r.Starttime.UnixNano(), 10)
-	//log.Print("cmd=", cmd)
 	q := client.Query{
 		Command:  cmd,
 		Database: r.KiekerDb,
 	}
 	response, err := clnt.Query(q)
-	//log.Print("sent cmd")
 	if err != nil {
 		log.Fatal("Error: cannot query data with cmd=", cmd, err)
 		return
@@ -367,10 +341,6 @@ func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) 
 			continue
 		}
 
-		//if !r.Endtime.IsZero() && t.After(r.Endtime) {
-		////break LoopChunk // break chunk loop if timestamp of current query result exceeds the lasttimestamp or the defined endtime
-		//return
-		//}
 		eoi, _ := row[1].(json.Number).Int64()
 		ess, _ := row[2].(json.Number).Int64()
 		hostname, _ := row[3].(string)
@@ -402,13 +372,8 @@ func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) 
 		trace = append(trace, record)
 		traceIds[record.TraceId] = trace
 
-		//curtimestamp = t
 	}
-	//if time.Now().After(r.Endtime) {
-	////if curtimestamp.After(r.Endtime) {
-	//break LoopChunk
-	//}
-	//}
+
 LoopTraces:
 	for _, v := range traceIds {
 		sort.Sort(v)
@@ -458,92 +423,12 @@ LoopTraces:
 			}
 			stk.Push(callee)
 		}
-		//break // test
 	}
 	m.ComputeProb()
-	//log.Print(&m)
-	//log.Print()
 	mCh <- m
 
 	return
 }
-
-//func (r *InfluxKiekerReader) readRealtime(clnt client.Client, ch chan TSPoint) {
-//// Wait until a full minute has passed
-//// TODO: wait according to r.Interval
-//remainingSeconds := time.Duration((60 - time.Now().Second()) * 1e9)
-//log.Print("Waiting ", remainingSeconds)
-//time.Sleep(remainingSeconds)
-//// Wait a few more seconds for data to arrive at influxdb
-//time.Sleep(5 * time.Second)
-//ticker := time.NewTicker(r.Interval)
-//curtime := time.Now().Truncate(time.Minute)
-//for {
-//log.Print("Reading monitoring data at ", curtime)
-//for _, d := range r.Archdepmod {
-//var q client.Query
-//var cmd string
-//// Query for different types of components
-//switch d.Component.Type {
-//case "responsetime":
-//aggregation := viper.GetString("cfp.responsetime.aggregation")
-//aggregationvalue := viper.GetString("cfp.responsetime.aggregationvalue")
-//// TODO: change group by time according to r.Interval
-////cmd := "select " + aggregation + "(\"responseTime\"," + aggregationvalue + ") from operationExecution where \"hostname\" = '" + d.Component.Hostname + "' and \"operationSignature\" = '" + d.Component.Name + "' and time >= " + strconv.FormatInt(curtime.Add(-1*r.Interval).UnixNano(), 10) + " and time < " + strconv.FormatInt(curtime.UnixNano(), 10) + " group by time(" + r.Interval.String() + ")"
-//cmd := "select " + aggregation + "(\"responseTime\"," + aggregationvalue + ") from OperationExecution where \"hostname\" = '" + d.Component.Hostname + "' and \"operationSignature\" = '" + d.Component.Name + "' and time >= " + strconv.FormatInt(curtime.Add(-1*r.Interval).UnixNano(), 10) + " and time < " + strconv.FormatInt(curtime.UnixNano(), 10) + " group by time(1m)"
-//q = client.Query{
-//Command:  cmd,
-//Database: r.KiekerDb,
-//}
-//case "cpu":
-//aggregation := viper.GetString("cfp.cpu.aggregation")
-//aggregationvalue := viper.GetString("cfp.cpu.aggregationvalue")
-//cmd := "select " + aggregation + "(\"value\"," + aggregationvalue + ") from \"cpu/usage_rate\" where \"pod_name\" = '" + d.Component.Hostname + "' and time >= " + strconv.FormatInt(curtime.Add(-1*r.Interval).UnixNano(), 10) + " and time < " + strconv.FormatInt(curtime.UnixNano(), 10) + " group by time(1m)"
-//q = client.Query{
-//Command:  cmd,
-//Database: r.K8sDb,
-//}
-//case "memory":
-//aggregation := viper.GetString("cfp.memory.aggregation")
-//aggregationvalue := viper.GetString("cfp.memory.aggregationvalue")
-//cmd := "select " + aggregation + "(\"value\"," + aggregationvalue + ") from \"cpu/usage_rate\" where \"pod_name\" = '" + d.Component.Hostname + "' and time >= " + strconv.FormatInt(curtime.Add(-1*r.Interval).UnixNano(), 10) + " and time < " + strconv.FormatInt(curtime.UnixNano(), 10) + " group by time(1m)"
-//q = client.Query{
-//Command:  cmd,
-//Database: r.K8sDb,
-//}
-//}
-//response, err := clnt.Query(q)
-//if err != nil {
-//log.Fatal("Error: cannot query data with cmd=", cmd, err)
-//break
-//}
-//if response.Error() != nil {
-//log.Fatal("Error: bad response with cmd=", cmd, response.Error())
-//break
-//}
-//res := response.Results
-
-//if len(res[0].Series) == 0 {
-//continue // no data - try next component
-//}
-//// Parse time and response time
-//for _, row := range res[0].Series[0].Values {
-//t, err := time.Parse(time.RFC3339, row[0].(string))
-//if err != nil {
-//log.Fatal(err)
-//}
-
-//if row[1] != nil {
-//val, _ := row[1].(json.Number).Float64()
-//point := TSPoint{d.Component, t, val}
-//ch <- point
-//}
-//}
-//}
-//curtime = <-ticker.C
-//curtime = curtime.Truncate(time.Minute)
-//}
-//}
 
 func (r *InfluxKiekerReader) getFirstAndLastTimestamp(clnt client.Client) (time.Time, time.Time) {
 	var firsttimestamp, lasttimestamp time.Time

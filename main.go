@@ -30,16 +30,12 @@ var htmlpage = []byte(`
 `)
 
 func main() {
-	//viper.SetDefault("influxdb.addr", "http://influxdb:8086")
-	viper.SetDefault("influxdb.addr", "http://10.0.11.238:31070")
-	//viper.SetDefault("influxdb.addr", "http://localhost:8086")
+	viper.SetDefault("influxdb.addr", "http://influxdb:8086")
 	viper.SetDefault("influxdb.username", "root")
 	viper.SetDefault("influxdb.password", "root")
 	viper.SetDefault("influxdb.db.kieker", "kieker")
 	viper.SetDefault("influxdb.db.k8s", "k8s")
-	//viper.SetDefault("hora.addr", "http://hora/adm")
-	viper.SetDefault("hora.addr", "http://10.0.11.238:31100/adm")
-	//viper.SetDefault("hora.addr", "http://localhost:8080/adm")
+	viper.SetDefault("hora.addr", "http://hora:8080/adm")
 	viper.SetDefault("webui.port", "8081")
 
 	Serve()
