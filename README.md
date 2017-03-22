@@ -1,1 +1,1 @@
-# admx
+# Architectural Dependency Model Extractor
