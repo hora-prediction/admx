@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/teeratpitakrat/admx/influxkieker"
+	"github.com/hora-prediction/admx/influxkieker"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"

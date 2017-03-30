@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/teeratpitakrat/admx/kieker"
-	"github.com/teeratpitakrat/hora/adm"
+	"github.com/hora-prediction/admx/kieker"
+	"github.com/hora-prediction/hora/adm"
 
 	"github.com/golang-collections/collections/stack"
 	"github.com/influxdata/influxdb/client/v2"
@@ -63,7 +63,7 @@ func (r *InfluxKiekerReader) Read() <-chan adm.ADM {
 
 func (r *InfluxKiekerReader) readBatch(clnt client.Client, mCh chan adm.ADM) {
 	traceIds := make(map[int64]kieker.OperationExecutionRecords)
-	m := adm.New()
+	m := adm.ADM{}
 
 	// Get first and last timestamp in influxdb
 	var curtimestamp, firsttimestamp, lasttimestamp time.Time
@@ -152,19 +152,10 @@ LoopTraces:
 		stk := stack.New()
 		for _, callee := range v {
 			if callee.Eoi != eoi+1 {
-				//log.Print("Error: broken trace:")
-				//for _, broken := range v {
-				//log.Print(broken)
-				//}
-				//log.Print()
 				continue LoopTraces
 			}
 			if callee.Ess > ess+1 {
 				log.Print("Error: broken trace:")
-				//for _, broken := range v {
-				//log.Print(broken)
-				//}
-				//log.Print()
 				continue LoopTraces
 			}
 			for i := ess - callee.Ess; i >= 0; i-- {
@@ -211,15 +202,11 @@ func incrementCountEntryPoint(m adm.ADM, caller kieker.OperationExecutionRecord)
 		Type:     "responsetime",
 		Called:   0,
 	}
-	callerDepInfo, ok := m[compCaller.UniqName()]
-	if !ok {
-		// caller is not in ADM
-		newDepInfo := adm.NewDependencyInfo(compCaller)
-		addDefaultHardwareDependency(&m, newDepInfo)
-		m[compCaller.UniqName()] = newDepInfo
-		callerDepInfo = newDepInfo
+	if _, ok := m[compCaller.UniqName()]; !ok {
+		m.AddDependency(nil, &compCaller)
+		addDefaultHardwareDependency(m, compCaller)
 	}
-	callerDepInfo.Component.Called++
+	m.IncrementCount(nil, &compCaller)
 }
 
 func incrementCount(m adm.ADM, caller, callee kieker.OperationExecutionRecord) {
@@ -236,77 +223,31 @@ func incrementCount(m adm.ADM, caller, callee kieker.OperationExecutionRecord) {
 		Type:     "responsetime",
 		Called:   0,
 	}
-	// Add callee to adm if not already exists
-	calleeDepInfo, ok := m[compCallee.UniqName()]
-	if !ok {
-		newDepInfo := adm.NewDependencyInfo(compCallee)
-		addDefaultHardwareDependency(&m, newDepInfo)
-		m[compCallee.UniqName()] = newDepInfo
-		calleeDepInfo = newDepInfo
-	}
-	calleeDepInfo.Component.Called++
-
-	callerDepInfo, ok := m[compCaller.UniqName()]
-	if !ok {
-		// caller is not in ADM
-		newDepInfo := adm.NewDependencyInfo(compCaller)
-		addDefaultHardwareDependency(&m, newDepInfo)
-		newDep := adm.NewDependency(compCallee, 0, 0)
-		appendNewDepInfo := append(newDepInfo.Dependencies, *newDep)
-		newDepInfo.Dependencies = appendNewDepInfo
-		callerDepInfo = newDepInfo
-	}
-	callerDepToCallee := getDependency(callerDepInfo, compCallee)
-	if callerDepToCallee == nil {
-		dep := adm.NewDependency(compCallee, 0, 0)
-		newCallerDepInfoDependencies := append(callerDepInfo.Dependencies, *dep)
-		callerDepInfo.Dependencies = newCallerDepInfoDependencies
-		callerDepToCallee = getDependency(callerDepInfo, compCallee)
-	}
-	callerDepToCallee.Called++
-	m[compCaller.UniqName()] = callerDepInfo
+	m.AddDependency(&compCaller, &compCallee)
+	m.IncrementCount(&compCaller, &compCallee)
 }
 
-func getDependency(depInfo *adm.DependencyInfo, c adm.Component) *adm.Dependency {
-	deps := depInfo.Dependencies
-	for i := 0; i < len(deps); i++ {
-		if deps[i].Component.Name == c.Name && deps[i].Component.Hostname == c.Hostname && deps[i].Component.Type == c.Type {
-			return &deps[i]
-		}
-	}
-	return nil
-}
-
-func addDefaultHardwareDependency(m *adm.ADM, depInfo *adm.DependencyInfo) {
-	deps := depInfo.Dependencies
+func addDefaultHardwareDependency(m adm.ADM, component adm.Component) {
 	cpu := adm.Component{
 		Name:     "cpu0",
-		Hostname: depInfo.Component.Hostname,
+		Hostname: component.Hostname,
 		Type:     "cpu",
 		Called:   1<<63 - 1,
 	}
-	cpuDep := adm.NewDependency(cpu, 0, 1<<63-1)
-	cpuDepInfo := adm.NewDependencyInfo(cpu)
+	m.AddDependency(&component, &cpu)
 	memory := adm.Component{
 		Name:     "memory0",
-		Hostname: depInfo.Component.Hostname,
+		Hostname: component.Hostname,
 		Type:     "memory",
 		Called:   1<<63 - 1,
 	}
-	memoryDep := adm.NewDependency(memory, 0, 1<<63-1)
-	memoryDepInfo := adm.NewDependencyInfo(memory)
-	(*m)[cpu.UniqName()] = cpuDepInfo
-	(*m)[memory.UniqName()] = memoryDepInfo
-	// TODO: dep to container?
-	deps = append(deps, *cpuDep)
-	deps = append(deps, *memoryDep)
-	depInfo.Dependencies = deps
+	m.AddDependency(&component, &memory)
 }
 
 func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) {
 	defer close(mCh)
 	traceIds := make(map[int64]kieker.OperationExecutionRecords)
-	m := adm.New()
+	m := adm.ADM{}
 
 	waitDuration := r.Endtime.Sub(r.Starttime)
 	waitCh := time.After(waitDuration)
@@ -381,19 +322,10 @@ LoopTraces:
 		stk := stack.New()
 		for _, callee := range v {
 			if callee.Eoi != eoi+1 {
-				//log.Print("Error: broken trace:")
-				//for _, broken := range v {
-				//log.Print(broken)
-				//}
-				//log.Print()
 				continue LoopTraces
 			}
 			if callee.Ess > ess+1 {
 				log.Print("Error: broken trace:")
-				//for _, broken := range v {
-				//log.Print(broken)
-				//}
-				//log.Print()
 				continue LoopTraces
 			}
 			for i := ess - callee.Ess; i >= 0; i-- {
