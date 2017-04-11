@@ -2,9 +2,9 @@ title = "ADMX configuration"
 
 [admx]
 	batch = true
-	starttime = "Fri, 31 Mar 2017 13:10:00 GMT"
-	endtime = "Fri, 31 Mar 2017 13:25:00 GMT"
-	output = "/tmp/adm.json"
+	starttime = "Tue, 11 Apr 2017 13:13:00 CET"
+	endtime = "Tue, 11 Apr 2017 14:20:00 CET"
+	outdir = "/tmp/admx"
 	[admx.webui]
 		port = 8081
 [influxdb]

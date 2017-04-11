@@ -136,7 +136,12 @@ func startRealtimeExtraction(duration time.Duration, horaAddr string) {
 }
 
 func startBatchExtraction(starttime, endtime time.Time) {
-	output := viper.GetString("admx.output")
+	outdir := viper.GetString("admx.outdir")
+	outdir += "-" + time.Now().Format("2006-01-02T15:04:05Z07:00")
+	err := os.Mkdir(outdir, 0755)
+	if err != nil {
+		log.Printf("evaluator: cannot create outdir: %s. %s", outdir, err)
+	}
 
 	reader := &influxkieker.InfluxKiekerReader{
 		Addr:      viper.GetString("influxdb.kieker.addr"),
@@ -150,17 +155,35 @@ func startBatchExtraction(starttime, endtime time.Time) {
 	ch := reader.Read()
 	m, ok := <-ch
 	if ok {
+		// Export json
 		mjson, err := json.Marshal(m)
 		if err != nil {
 			log.Print("Error marshalling ADM")
 			return
 		}
-		f, err := os.Create(output)
+		f, err := os.Create(outdir + "/adm.json")
 		if err != nil {
 			log.Printf("evaluator: cannot create file. %s", err)
 		}
 		defer f.Close()
 		_, err = f.Write(mjson)
+		if err != nil {
+			log.Printf("evaluator: cannot write to file. %s", err)
+		}
+		// Export dot
+		dotStr := "digraph {"
+		for component, depInfo := range m {
+			for _, dep := range depInfo.Dependencies {
+				dotStr += component + "->" + dep.Callee.UniqName() + "\n"
+			}
+		}
+		dotStr += "}"
+		fdot, err := os.Create(outdir + "/adm.dot")
+		if err != nil {
+			log.Printf("evaluator: cannot create file. %s", err)
+		}
+		defer fdot.Close()
+		_, err = fdot.WriteString(dotStr)
 		if err != nil {
 			log.Printf("evaluator: cannot write to file. %s", err)
 		}
