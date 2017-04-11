@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hora-prediction/admx/influxkieker"
@@ -30,20 +32,35 @@ var htmlpage = []byte(`
 `)
 
 func main() {
-	viper.SetDefault("influxdb.addr", "http://influxdb:8086")
-	viper.SetDefault("influxdb.username", "root")
-	viper.SetDefault("influxdb.password", "root")
-	viper.SetDefault("influxdb.db.kieker", "kieker")
-	viper.SetDefault("influxdb.db.k8s", "k8s")
-	viper.SetDefault("hora.addr", "http://hora:8080/adm")
-	viper.SetDefault("webui.port", "8081")
+	// Read configurations
+	log.Println("Reading configuration")
+	viper.SetConfigName("config") // name of config file (without extension)
+	viper.SetConfigType("toml")
+	viper.AddConfigPath(".")
+	err := viper.ReadInConfig() // Find and read the config file
+	if err != nil {             // Handle errors reading the config file
+		log.Println("Fatal error config file: %s \n", err)
+	}
 
-	Serve()
+	viper.SetEnvPrefix("hora") // will be uppercased automatically
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// TODO: use new structure
+
+	batchMode := viper.GetBool("admx.batch")
+	if batchMode {
+		starttime := viper.GetTime("admx.starttime")
+		endtime := viper.GetTime("admx.endtime")
+		startBatchExtraction(starttime, endtime)
+	} else {
+		Serve()
+	}
 }
 
 func Serve() {
 	log.Print("Starting ADMX Web UI")
-	port := viper.GetString("webui.port")
+	port := viper.GetString("admx.webui.port")
 	r := mux.NewRouter()
 	r.HandleFunc("/admx", handler).Methods("GET")
 	r.HandleFunc("/admx", posthandler).Methods("POST")
@@ -69,11 +86,11 @@ func posthandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		w.Write([]byte("Error parsing " + duration))
 	}
-	go startExtraction(durationTime, horaAddr)
+	go startRealtimeExtraction(durationTime, horaAddr)
 	w.Write([]byte(fmt.Sprintf("Starting ADM extraction for a duration of %s minutes until %s \nThe extracted ADM will be POSTed as a parameter \"adm\" to %s", duration, time.Now().Add(durationTime).String(), horaAddr)))
 }
 
-func startExtraction(duration time.Duration, horaAddr string) {
+func startRealtimeExtraction(duration time.Duration, horaAddr string) {
 	starttime := time.Now()
 	endtime := starttime.Add(duration)
 	reader := &influxkieker.InfluxKiekerReader{
@@ -115,5 +132,37 @@ func startExtraction(duration time.Duration, horaAddr string) {
 			return
 		}
 		fmt.Println(resp.Status)
+	}
+}
+
+func startBatchExtraction(starttime, endtime time.Time) {
+	output := viper.GetString("admx.output")
+
+	reader := &influxkieker.InfluxKiekerReader{
+		Addr:      viper.GetString("influxdb.kieker.addr"),
+		Username:  viper.GetString("influxdb.kieker.username"),
+		Password:  viper.GetString("influxdb.kieker.password"),
+		KiekerDb:  viper.GetString("influxdb.kieker.db"),
+		Batch:     true,
+		Starttime: starttime,
+		Endtime:   endtime,
+	}
+	ch := reader.Read()
+	m, ok := <-ch
+	if ok {
+		mjson, err := json.Marshal(m)
+		if err != nil {
+			log.Print("Error marshalling ADM")
+			return
+		}
+		f, err := os.Create(output)
+		if err != nil {
+			log.Printf("evaluator: cannot create file. %s", err)
+		}
+		defer f.Close()
+		_, err = f.Write(mjson)
+		if err != nil {
+			log.Printf("evaluator: cannot write to file. %s", err)
+		}
 	}
 }

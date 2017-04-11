@@ -62,26 +62,24 @@ func (r *InfluxKiekerReader) Read() <-chan adm.ADM {
 }
 
 func (r *InfluxKiekerReader) readBatch(clnt client.Client, mCh chan adm.ADM) {
-	traceIds := make(map[int64]kieker.OperationExecutionRecords)
-	m := adm.ADM{}
-
-	// Get first and last timestamp in influxdb
-	var curtimestamp, firsttimestamp, lasttimestamp time.Time
-	firsttimestamp, lasttimestamp = r.getFirstAndLastTimestamp(clnt)
-	if firsttimestamp.IsZero() && lasttimestamp.IsZero() {
-		log.Print("Error: cannot find monitoring data")
+	if r.Starttime.IsZero() {
+		log.Printf("Please specify starttime when using batch mode")
+		close(mCh)
 		return
 	}
-	// Get the larger starttime
-	if r.Starttime.After(firsttimestamp) {
-		curtimestamp = r.Starttime.Add(-time.Nanosecond)
-	} else {
-		curtimestamp = firsttimestamp.Add(-time.Nanosecond)
+	if r.Endtime.IsZero() {
+		log.Printf("Please specify endtime when using batch mode")
+		close(mCh)
+		return
 	}
+
+	traceIds := make(map[int64]kieker.OperationExecutionRecords)
+	m := adm.ADM{}
+	curtimestamp := r.Starttime
 
 LoopChunk: // Loop to get all data because InfluxDB return max. 10000 records by default
 	for {
-		cmd := "select * from OperationExecution where time > " + strconv.FormatInt(curtimestamp.UnixNano(), 10) + " and time <= " + strconv.FormatInt(lasttimestamp.UnixNano(), 10)
+		cmd := "select * from OperationExecution where time > " + strconv.FormatInt(curtimestamp.UnixNano(), 10) + " and time <= " + strconv.FormatInt(r.Endtime.UnixNano(), 10)
 		q := client.Query{
 			Command:  cmd,
 			Database: r.KiekerDb,
@@ -108,7 +106,7 @@ LoopChunk: // Loop to get all data because InfluxDB return max. 10000 records by
 				break
 			}
 
-			if t.After(lasttimestamp) || (!r.Endtime.IsZero() && t.After(r.Endtime)) {
+			if t.After(r.Endtime) {
 				break LoopChunk // break chunk loop if timestamp of current query result exceeds the lasttimestamp or the defined endtime
 			}
 			eoi, _ := row[1].(json.Number).Int64()
@@ -187,8 +185,6 @@ LoopTraces:
 		}
 	}
 	m.ComputeProb()
-	log.Print(&m)
-	log.Print()
 
 	mCh <- m
 	close(mCh)
