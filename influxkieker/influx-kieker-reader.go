@@ -236,20 +236,20 @@ func addDefaultHardwareDependency(m adm.ADM, component adm.Component) {
 		Called:   1<<63 - 1,
 	}
 	m.AddDependency(&component, &cpu)
-	memory := adm.Component{
-		Name:     "memory0",
-		Hostname: component.Hostname,
-		Type:     "memory",
-		Called:   1<<63 - 1,
-	}
-	m.AddDependency(&component, &memory)
+	//memory := adm.Component{
+	//Name:     "memory0",
+	//Hostname: component.Hostname,
+	//Type:     "memory",
+	//Called:   1<<63 - 1,
+	//}
+	//m.AddDependency(&component, &memory)
 
 	// Set dependency to max so that the weight is 1.0
 	compDepInfo := m[component.UniqName()]
 	cpuDep := compDepInfo.Dependencies[cpu.UniqName()]
 	cpuDep.Called = 1<<63 - 1
-	memoryDep := compDepInfo.Dependencies[memory.UniqName()]
-	memoryDep.Called = 1<<63 - 1
+	//memoryDep := compDepInfo.Dependencies[memory.UniqName()]
+	//memoryDep.Called = 1<<63 - 1
 }
 
 func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) {
