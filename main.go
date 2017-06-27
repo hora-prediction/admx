@@ -42,7 +42,7 @@ func main() {
 		log.Println("Fatal error config file: %s \n", err)
 	}
 
-	viper.SetEnvPrefix("hora") // will be uppercased automatically
+	viper.SetEnvPrefix("admx") // will be uppercased automatically
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
@@ -94,11 +94,11 @@ func startRealtimeExtraction(duration time.Duration, horaAddr string) {
 	starttime := time.Now()
 	endtime := starttime.Add(duration)
 	reader := &influxkieker.InfluxKiekerReader{
-		Addr:      viper.GetString("influxdb.addr"),
-		Username:  viper.GetString("influxdb.username"),
-		Password:  viper.GetString("influxdb.password"),
-		KiekerDb:  viper.GetString("influxdb.db.kieker"),
-		K8sDb:     viper.GetString("influxdb.db.k8s"),
+		Addr:      viper.GetString("influxdb.kieker.addr"),
+		Username:  viper.GetString("influxdb.kieker.username"),
+		Password:  viper.GetString("influxdb.kieker.password"),
+		KiekerDb:  viper.GetString("influxdb.kieker.db"),
+		K8sDb:     viper.GetString("influxdb.k8s.db"),
 		Batch:     false,
 		Starttime: starttime,
 		Endtime:   endtime,
@@ -109,10 +109,12 @@ func startRealtimeExtraction(duration time.Duration, horaAddr string) {
 		log.Print("Sending ADM to " + horaAddr)
 
 		mjson, err := json.Marshal(m)
+		fmt.Println("Finished marshalling")
 		if err != nil {
 			log.Print("Error marshalling ADM")
 			return
 		}
+		fmt.Println(string(mjson))
 
 		data := url.Values{}
 		data.Set("adm", string(mjson))
@@ -131,7 +133,9 @@ func startRealtimeExtraction(duration time.Duration, horaAddr string) {
 			log.Print("Error sending ADM: received empty response. Please check target address and port.")
 			return
 		}
-		fmt.Println(resp.Status)
+		fmt.Println("Finished POSTing with status: " + resp.Status)
+	} else {
+		log.Print("Error reading ADM: Channel closed")
 	}
 }
 

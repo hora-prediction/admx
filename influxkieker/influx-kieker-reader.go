@@ -279,6 +279,7 @@ func (r *InfluxKiekerReader) readRealtime(clnt client.Client, mCh chan adm.ADM) 
 	res := response.Results
 
 	if len(res[0].Series) == 0 {
+		log.Print("Error: No monitoring data available")
 		return // break if no more data is returned
 	}
 	// Parse time and response time
@@ -366,6 +367,7 @@ LoopTraces:
 	}
 	m.ComputeProb()
 	mCh <- m
+	log.Print("Finished creating ADM")
 
 	return
 }

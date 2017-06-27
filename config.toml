@@ -1,9 +1,9 @@
 title = "ADMX configuration"
 
 [admx]
-	batch = true
-	starttime = "Tue, 11 Apr 2017 13:13:00 CET"
-	endtime = "Tue, 11 Apr 2017 14:20:00 CET"
+	batch = false
+	starttime = "Thu, 20 Apr 2017 11:30:00 CEST"
+	endtime = "Thu, 20 Apr 2017 12:00:00 CEST"
 	outdir = "/tmp/admx"
 	[admx.webui]
 		port = 8081
